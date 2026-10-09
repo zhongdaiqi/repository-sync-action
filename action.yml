@@ -1,4 +1,4 @@
-name: 'Repository Sync'
+name: 'Smart Git Mirror'
 description: 'Sync a source git repo to a target repo. Skips if already in sync, clones + pushes if behind.'
 author: 'zhongdaiqi'
 branding:
