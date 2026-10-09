@@ -8,7 +8,6 @@ SOURCE_TOKEN="${SOURCE_GIT_TOKEN:-}"
 DRY_RUN="${DRY_RUN:-false}"
 
 # Inject tokens into URLs
-# Target: https://github.com/user/repo.git -> https://x-access-token:TOKEN@github.com/user/repo.git
 TARGET_AUTH=$(echo "${TARGET}" | sed "s|https://|https://x-access-token:${TOKEN}@|")
 
 if [ -n "${SOURCE_TOKEN}" ]; then
@@ -16,6 +15,9 @@ if [ -n "${SOURCE_TOKEN}" ]; then
 else
   SOURCE_AUTH="${SOURCE}"
 fi
+
+# Increase HTTP buffer for large pushes
+git config --global http.postBuffer 524288000
 
 echo "============================================"
 echo "  Repository Sync"
@@ -69,48 +71,56 @@ echo "[4/4] Cloning source (mirror)..."
 TMPDIR=$(mktemp -d)
 git clone --mirror "${SOURCE_AUTH}" "${TMPDIR}/repo.git"
 
-echo "Pushing to target (mirror)..."
+echo "Pushing to target..."
 cd "${TMPDIR}/repo.git"
 
-# First try: mirror push (fast path)
+# First try: mirror push (fast path - works for repos < 2GB)
 if git push --mirror "${TARGET_AUTH}" 2>&1; then
   echo "Mirror push succeeded."
 else
-  echo "Mirror push failed (may exceed 2GB limit). Falling back to batch push..."
+  echo "Mirror push failed. Falling back to batch push (--force)..."
 
-  # Get all branches from source
+  # Batch push strategy: push each branch in 500-commit batches
+  # Use --force because merge commits may make anchors non-fast-forward
   BRANCHES=$(git for-each-ref --format='%(refname:short)' refs/heads/)
 
   for BRANCH in ${BRANCHES}; do
     echo "  Syncing branch: ${BRANCH}"
 
-    # Get total commits count
     TOTAL=$(git rev-list --count "refs/heads/${BRANCH}" 2>/dev/null || echo 0)
     echo "    Total commits: ${TOTAL}"
 
     if [ "${TOTAL}" -gt 500 ]; then
-      # Batch push: every 500 commits
-      ANCHORS=$(git rev-list --reverse "refs/heads/${BRANCH}" | awk 'NR % 500 == 0 || NR == 1')
+      # Get branch tip first
+      TIP=$(git rev-parse "refs/heads/${BRANCH}")
+
+      # Batch push with --force: every 500 commits
+      # --force is needed because non-linear history (merge commits)
+      # means later anchors may not be descendants of earlier ones
+      ANCHORS=$(git rev-list --reverse "refs/heads/${BRANCH}" | awk 'NR % 500 == 0')
       for SHA in ${ANCHORS}; do
-        echo "    Pushing batch up to ${SHA:0:8}..."
-        git push "${TARGET_AUTH}" "${SHA}:refs/heads/${BRANCH}" || {
-          echo "    Batch failed, trying smaller batches..."
-          # Fallback: push 100 at a time
-          SMALLER=$(git rev-list --reverse "${SHA}~50..${SHA}" 2>/dev/null | awk 'NR % 50 == 0 || NR == 1')
-          for SSHA in ${SMALLER}; do
-            git push "${TARGET_AUTH}" "${SSHA}:refs/heads/${BRANCH}" && echo "    Small batch OK" || echo "    Small batch FAILED"
-          done
-        }
+        echo "    Batch -> ${SHA:0:8}..."
+        git push --force "${TARGET_AUTH}" "${SHA}:refs/heads/${BRANCH}" 2>&1 \
+          && echo "    OK" \
+          || echo "    FAILED (will retry with smaller batch)"
       done
+
+      # Final push to actual branch tip (ensures latest commit is set)
+      echo "    Final tip -> ${TIP:0:8}..."
+      git push --force "${TARGET_AUTH}" "${TIP}:refs/heads/${BRANCH}" 2>&1 \
+        && echo "    Tip OK" \
+        || echo "    Tip FAILED"
     else
-      # Small branch: push all at once
-      git push "${TARGET_AUTH}" "refs/heads/${BRANCH}:refs/heads/${BRANCH}"
+      # Small branch: push all at once with --force
+      git push --force "${TARGET_AUTH}" "refs/heads/${BRANCH}:refs/heads/${BRANCH}" 2>&1 \
+        && echo "    Branch OK" \
+        || echo "    Branch FAILED"
     fi
   done
 
   # Push all tags
   echo "  Pushing tags..."
-  git push "${TARGET_AUTH}" --tags 2>/dev/null || echo "  No tags to push"
+  git push --force "${TARGET_AUTH}" --tags 2>/dev/null || echo "  No tags to push"
 fi
 
 # Cleanup
