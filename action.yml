@@ -38,6 +38,9 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Make sync.sh executable
+      shell: bash
+      run: chmod +x "${{ github.action_path }}/sync.sh"
     - name: Run sync
       id: sync
       shell: bash
