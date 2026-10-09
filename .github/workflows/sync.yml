@@ -1,0 +1,19 @@
+name: Sync
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync repos
+        uses: ./
+        with:
+          source-git-url: ${{ secrets.SOURCE_GIT_URL }}
+          target-git-url: ${{ secrets.TARGET_GIT_URL }}
+          target-git-token: ${{ secrets.TARGET_GIT_TOKEN }}

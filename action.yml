@@ -1,0 +1,50 @@
+name: 'Repository Sync'
+description: 'Sync a source git repo to a target repo. Skips if already in sync, clones + pushes if behind.'
+author: 'zhongdaiqi'
+branding:
+  icon: 'refresh-cw'
+  color: 'green'
+
+inputs:
+  source-git-url:
+    description: 'Source repository URL (read-only clone)'
+    required: true
+  target-git-url:
+    description: 'Target repository URL (push destination)'
+    required: true
+  target-git-token:
+    description: 'PAT with push access to target repo'
+    required: true
+  source-git-token:
+    description: 'Token for private source repos (optional)'
+    required: false
+    default: ''
+  dry-run:
+    description: 'If true, only compare without pushing'
+    required: false
+    default: 'false'
+
+outputs:
+  synced:
+    description: '"true" if a push happened, "false" if skipped'
+    value: ${{ steps.sync.outputs.synced }}
+  source-sha:
+    description: 'Source HEAD commit SHA'
+    value: ${{ steps.sync.outputs.source-sha }}
+  target-sha:
+    description: 'Target HEAD commit SHA before sync'
+    value: ${{ steps.sync.outputs.target-sha }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run sync
+      id: sync
+      shell: bash
+      env:
+        SOURCE_GIT_URL: ${{ inputs.source-git-url }}
+        TARGET_GIT_URL: ${{ inputs.target-git-url }}
+        TARGET_GIT_TOKEN: ${{ inputs.target-git-token }}
+        SOURCE_GIT_TOKEN: ${{ inputs.source-git-token }}
+        DRY_RUN: ${{ inputs.dry-run }}
+      run: ${{ github.action_path }}/sync.sh
