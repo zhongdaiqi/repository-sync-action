@@ -21,15 +21,19 @@ In the repository that runs the sync workflow, add these secrets (Settings → S
 |--------|----------|-------------|
 | `SOURCE_GIT_URL` | ✅ | Source repo URL (e.g. `https://gitcode.com/user/repo.git`) |
 | `TARGET_GIT_URL` | ✅ | Target repo URL (e.g. `https://github.com/user/repo.git`) |
-| `TARGET_GIT_TOKEN` | ✅ | GitHub PAT with `repo` scope (for push) |
+| `TARGET_GIT_TOKEN` | ✅ | GitHub PAT with `repo` + `workflow` scope (see below) |
 
 ### 2. Create the PAT
 
 1. Go to GitHub → Settings → Developer settings → Personal access tokens → **Tokens (classic)**
 2. Generate new token (classic)
-3. Select scope: **`repo`** (full repo access)
+3. Select scopes:
+   - **`repo`** — full repository access (read/write/push)
+   - **`workflow`** — required if the source repo contains GitHub Actions workflow files (`.github/workflows/*.yml`); without this scope, pushes that include workflow file changes will be rejected by GitHub
 4. Set expiration (recommend 1 year)
 5. Copy the token and add it as secret `TARGET_GIT_TOKEN`
+
+> **When is `workflow` scope needed?** If the source repository contains any file under `.github/workflows/`, GitHub requires the push token to have the `workflow` scope. Without it, you'll get an error like `refusing to allow an OAuth App to create or update workflow`. When in doubt, just include it — it's harmless.
 
 ### 3. Add the workflow
 
