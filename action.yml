@@ -1,4 +1,4 @@
-name: 'Git-Repo-Sync'
+name: 'RepoSync'
 description: 'Sync a source git repo to a target repo. Skips if already in sync, clones + pushes if behind.'
 author: 'zhongdaiqi'
 branding:
